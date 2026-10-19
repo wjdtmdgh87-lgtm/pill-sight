@@ -1,297 +1,162 @@
-<h1 align="center">🔍 PILL SIGHT 알약 탐지 프로그램</h1>
+<h1 align="center">PILL SIGHT</h1>
 
 <p align="center">
-  <b>  ▎ YOLO 기반 실시간 알약 탐지 및 분류 시스템       
-  카메라 또는 이미지 입력으로 알약의 종류와 위치를
-  자동으로 감지하고, 실험별 성능 지표를          
-  체계적으로 추적·비교합니다. </b>
+  <b>경구약제 사진에서 알약 73종의 위치와 이름을 찾는 4단계 객체 탐지 파이프라인</b><br>
+  YOLO12n 5-Fold WBF · EfficientNet-B3 재분류 · EasyOCR 각인 보정
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/YOLO12-Ultralytics-FF6B6B?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Ultralytics-YOLO12n-FF6B6B?style=flat-square"/>
+  <img src="https://img.shields.io/badge/PyTorch-EfficientNet--B3-EE4C2C?style=flat-square&logo=pytorch&logoColor=white"/>
+  <img src="https://img.shields.io/badge/EasyOCR-OCR-00B4D8?style=flat-square"/>
 </p>
 
----
-
-## 👥 팀원 구성
-
-<table align="center">
-  <tr>
-    <td align="center" width="150">
-      <img src="docs/profiles/Adam/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>Adam</b><br/>
-      <a href="https://github.com/Adam-1228">@Adam</a>
-    </td>
-    <td align="center" width="150">
-      <img src="docs/profiles/Eastar0102/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>Eastar0102</b><br/>
-      <a href="https://github.com/Eastar0102">@Eastar0102</a>
-    </td>
-    <td align="center" width="150">
-      <img src="docs/profiles/heewon02/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>heewon02</b><br/>
-      <a href="https://github.com/heewon02">@heewon02</a>
-    </td>
-    <td align="center" width="150">
-      <img src="docs/profiles/minjaejeon/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>minjaejeon</b><br/>
-      <a href="https://github.com/minjaejeon0827">@minjaejeon</a>
-    </td>
-    <td align="center" width="150">
-      <img src="docs/profiles/%EA%B8%B0%ED%95%98/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>기하</b><br/>
-      <a href="https://github.com/wenttoofar">@기하</a>
-    </td>
-    <td align="center" width="150">
-      <img src="docs/profiles/%EB%AC%B4%EC%8B%AC/profile.png" width="100" height="100" style="border-radius:50%"/><br/>
-      <b>무심</b><br/>
-      <a href="https://github.com/wjdtmdgh87-lgtm">@무심</a>
-    </td>
-  </tr>
-</table>
+코드잇 AI 엔지니어 10기 초급 프로젝트 · 해피 6팀 · 2026.04.20 ~ 05.11 (3주)
 
 ---
 
-## 🛠 기술 스택
+## 결과
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/YOLO-FF6B6B?style=flat-square&logo=yolo&logoColor=white"/>
-  <img src="https://img.shields.io/badge/EasyOCR-00B4D8?style=flat-square"/>
-  <img src="https://img.shields.io/badge/Pandas-150458?style=flat-square&logo=pandas&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Matplotlib-11557C?style=flat-square"/>
-  <img src="https://img.shields.io/badge/Ultralytics-00B4D8?style=flat-square"/>
-</p>
+| 지표 | 값 | 기준 |
+|---|---|---|
+| YOLO12n mAP50 | **0.9944** | 5-Fold 검증 데이터 평균 |
+| YOLO12n mAP50-95 | **0.9847** | 5-Fold 검증 데이터 평균 |
+| EfficientNet-B3 정확도 | **0.9980** | 잘라낸 알약 이미지 분류, 검증 데이터 |
+| 테스트 이미지 수동 검수 | **알약 3,229개 중 클래스 오판 3건** | 테스트 이미지 832장을 팀원이 직접 확인 |
 
----
-### 발표 자료
+- 위 수치는 검증 데이터와 수동 검수 결과예요. 공식 채점 점수가 아니에요.
+- 데이터와 모델을 함께 바꾸며 개선해서, 단계별 효과는 동일 조건에서 비교하지 못했어요.
 
+## 문제와 접근
 
-[📄 프로젝트 보고서](./docs/profiles/6팀_보고서.pdf)
+| 문제 | 접근 |
+|---|---|
+| 원본 232장으로 73개 클래스를 구분해야 함. 희귀 클래스는 3장, 많은 클래스는 150장 이상 | 약학정보원·AI Hub 기반 합성 증강 861장, OOD 카탈로그 20종, 데이터 11개 버전 |
+| 색·모양이 거의 같고 각인만 다른 알약이 많음 | 저신뢰도 박스만 EfficientNet-B3로 재분류하고 EasyOCR로 각인 확인 |
+| 이미지 모서리의 배경 곡면을 알약으로 오탐 | 경계 5px 안에서 두 변에 닿는 박스 제거 |
+| 세로로 놓인 알약을 못 찾는 방향 편향 | 회전 증강 degrees 15 → 90, flipud 0.5 |
 
-[📊 발표 자료](./docs/profiles/6팀_발표.pptx)
+## 추론 파이프라인
 
----
-
-## 협업일지
-
-## 협업일지
-
-| 이름 | 링크 |
-|------|------|
-| 성치용 | [협업일지][치용] |
-| 정승호 | [협업일지][승호] |
-| 전민재 | [협업일지][민재] |
-| 임동규 | [협업일지][동규] |
-| 송기하 | [협업일지][기하] |
-| 조희원 | [협업일지][희원] |
-
-[치용]: https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80
-[승호]: https://www.notion.so/348835bcc7588014bdb7d345644b534b?source=copy_link
-[민재]: https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link
-[동규]: https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link
-[기하]: docs/profiles/기하.pdf
-[희원]:https://www.notion.so/6-Daily-35d57c90138b8005b36fc16e96cb7b28?source=copy_link
-## 📁 프로젝트 구조
-
-```
-📦 project-root
-├── 📂 src/
-│   ├── config.py              # 경로 및 하이퍼파라미터 설정
-│   ├── dataset.py             # 데이터 경로 수정 및 통계 출력
-│   ├── model.py               # 학습 및 예측
-│   ├── ocr_correction.py      # OCR 기반 각인 보정
-│   ├── wbf_ensemble.py        # 5-Fold WBF 앙상블
-│   ├── experiment.py          # 실험 관리
-│   ├── prepare_data.py        # 데이터 전처리
-│   ├── 📂 eval/               # 평가 모듈
-│   │   ├── metrics.py         # YOLO 메트릭 정규화
-│   │   ├── visualize.py       # 결과 시각화
-│   │   ├── compare_yolo_runs.py  # 실험 비교
-│   │   └── report_template.py    # 리포트 생성
-│   └── 📂 utils/              # 유틸리티
-│       ├── common.py
-│       └── io_utils.py
-├── 📂 config/
-│   └── settings.py            # 전역 설정
-├── 📂 data/
-│   ├── images/train/          # 학습 이미지
-│   ├── images/test/           # 테스트 이미지
-│   ├── labels/train/          # YOLO 형식 라벨
-│   └── splits/                # fold별 train/val txt
-├── 📂 models/                 # 학습 완료된 가중치
-├── 📂 results/                # 학습 결과 (csv, confusion matrix 등)
-├── 📂 outputs/
-│   └── yolo/                  # YOLO 출력 결과
-├── 📂 docs/
-│   └── profiles/              # 팀원 프로필
-├── data.yaml                  # YOLO 데이터셋 설정
-├── code_mapping.csv           # 코드-약품명 매핑
-└── main.py
+```mermaid
+flowchart LR
+    A[테스트 이미지] --> B[YOLO12n × 5 fold]
+    B --> C[WBF 병합<br/>IoU 0.5]
+    C --> D[후처리<br/>모서리 오탐·중복 제거]
+    D --> E{신뢰도}
+    E -- 0.25 미만 --> X[제거]
+    E -- 0.85 이상 --> OUT[최종 결과<br/>submission.csv]
+    E -- 0.25 ~ 0.85 --> F[EfficientNet-B3<br/>재분류]
+    F --> G[EasyOCR 각인 보정<br/>4방향 × 4전처리]
+    G --> OUT
 ```
 
----
+- **신뢰도 0.85 이상**은 정밀도가 1에 가까워 그대로 출력해요. 추가 단계를 건너뛰어 속도를 지켜요.
+- **0.25 ~ 0.85**만 재분류와 OCR로 다시 확인해요. 전체 박스의 약 37%예요.
+- **OCR**은 EasyOCR 내장 회전 대신 이미지를 0·90·180·270도로 직접 돌려 읽어요. 내장 옵션이 세로 각인 'SK'를 'U'로 잘못 읽었기 때문이에요.
 
-## 🚀 시작하기
+## 모델 변천
 
-### 설치
+| 날짜 | 모델 | 바꾼 이유 |
+|---|---|---|
+| 04.21 | YOLO11s 단일 모델 | 베이스라인. 혼동행렬에서 비슷한 알약 간 오분류 확인 |
+| 04.24 | YOLO11s 5-Fold + WBF | 약 1,000장 규모에서 단일 모델 과적합. 얼리스톱이 꺼진 설정(patience 0)도 수정 |
+| 04.27 | + 후처리 필터 2종 | WBF 이후 모서리 오탐과 중복 박스 발생 |
+| 04.28 | YOLO12s + EasyOCR | 외관은 같고 각인만 다른 약품 구분 |
+| 04.29 | YOLO12n + EfficientNet-B3 2-Stage | 각인이 흐린 약품은 OCR로도 실패. 5개 fold 운용을 위해 nano로 경량화 |
+| 05.04 | YOLO12n, imgsz 832 · batch 8 | 데이터 v11로 커진 뒤 RTX 4070 12GB에서 OOM 재발 |
 
-```bash
-git clone https://github.com/wjdtmdgh87-lgtm/codeit-.git
-cd codeit-
-pip install -r requirements.txt
-```
+<details>
+<summary>최종 학습 설정</summary>
 
-GPU(CUDA) 환경:
+| 항목 | YOLO12n | EfficientNet-B3 |
+|---|---|---|
+| 입력 크기 | 832 | 300 |
+| batch / epochs / patience | 8 / 150 / 30 | 64 / 150 / 30 |
+| 옵티마이저 | SGD, lr0 0.01 | AdamW, lr 0.001 (2단계: 1e-4) |
+| 손실·불균형 대응 | cls 1.5 | FocalLoss(γ=2, label smoothing 0.1), 클래스 가중치, WeightedRandomSampler |
+| 증강 | degrees 90, flipud 0.5, hsv_s·hsv_v 0.2, mosaic 0.8, mixup 0.05, close_mosaic 30, copy_paste 0.5 | 회전·색 변화·블러·RandomErasing |
+| 기타 | 5-Fold, seed 42 | 헤드만 10 epoch 학습 후 뒤쪽 블록(features[5:]) 미세조정 |
 
-```bash
-pip install -r requirements-cuda.txt
-```
+설정 파일: [`src/config.py`](src/config.py)
 
----
+</details>
+
+## 데이터
+
+| 버전 | 핵심 변경 | 클래스 | 학습 이미지 |
+|---|---|---|---|
+| v1~v2 | 원본 수령, 중복 라벨 3건 수정 | 56 | 232장 |
+| v3~v4 | 클래스 11개 추가, bbox 크롭 증강, OOD 12건 정리 | 67 | 232장 + 크롭 303장 |
+| v5~v7 | PNG → JPG 경량화(용량 -83%), OOD 17종 | 67 | 232장 |
+| v8~v9 | 약학정보원 기반 합성 증강 | 71 | 857장 |
+| v10 | AI Hub 기반 합성, 촬영 각도 균등화 | 74 | 1,112장 |
+| v11 | 끝까지 미인식된 코싹엘정 보강 | 73 | 1,093장 |
+
+데이터는 저장소에 포함하지 않고, 폴더 구조만 [`data/`](data/)에 남겨 뒀어요.
+
+## 팀
+
+| 이름 | 역할 | 맡은 일 |
+|---|---|---|
+| 정승호 [@wjdtmdgh87-lgtm](https://github.com/wjdtmdgh87-lgtm) | PM | 일정·역할 관리, 기술 방식 결정, 저장소 통합, 보고서·발표 |
+| 임동규 [@Eastar0102](https://github.com/Eastar0102) | 모델 엔지니어 | YOLO 학습, WBF, 후처리, OCR, 2-Stage 분류기 |
+| 송기하 [@wenttoofar](https://github.com/wenttoofar) | 실험 리드 | 실험·평가 프레임워크, 비교 실험 설계 |
+| 성치용 [@Adam-1228](https://github.com/Adam-1228) | 데이터 엔지니어 | 데이터 버전 관리, 합성 증강, OOD 카탈로그 |
+| 조희원 [@heewon02](https://github.com/heewon02) | 데이터 엔지니어 | 데이터 버전 관리, 합성 증강, OOD 카탈로그 |
+| 전민재 [@minjaejeon0827](https://github.com/minjaejeon0827) | 웹 개발 | 시연용 웹 앱(Streamlit·FastAPI) |
 
 ## 실행 방법
 
-데이터 폴더에 이미지(`train`, `test`)와 라벨 파일(`.txt`)을 넣은 후 프로젝트 루트에서 실행합니다.
-
 ```bash
-python main.py --mode [모드] [옵션]
+pip install -r requirements.txt          # CUDA 환경은 requirements-cuda.txt 추가 설치
+python main.py --mode train_all          # YOLO12n 5-Fold 학습 → models/fold*_best.pt
+python main.py --mode crop_data          # Stage 2용 알약 크롭 생성
+python main.py --mode train_stage2       # EfficientNet-B3 학습
+python main.py --mode wbf --source data/images/test   # 전체 파이프라인 추론 + submission.csv
 ```
 
----
+| 모드 | 설명 |
+|---|---|
+| `data` | split 목록 경로 보정과 데이터 통계 |
+| `train` / `train_all` | fold 1 단일 학습 / fold 1~5 전체 학습 |
+| `crop_data` / `train_stage2` | Stage 2 크롭 데이터 생성 / EfficientNet-B3 학습 |
+| `predict` | 단일 모델 예측 (`--weights` 지정 가능) |
+| `wbf` | 5-Fold WBF + 후처리 + Stage 2 + OCR 전체 파이프라인 |
+| `experiment` / `experiment_all` / `compare` | `config/experiments/`의 YAML 실험 실행과 결과 비교 |
 
-## 실행 모드
+옵션: `--conf`(기본 0.25), `--no-ocr`, `--no-stage2`, `--exp <실험 이름>`
 
-### `--mode data`
-데이터팀이 제공한 split txt 파일의 경로를 수정하고 통계를 출력합니다.
+데이터 분할 구성은 `python check_split_v3.py`로 확인할 수 있어요.
 
-```bash
-python main.py --mode data
-```
-
-### `--mode train`
-`data.yaml` 기준으로 fold 1 단일 학습을 실행합니다.  
-학습 완료 후 `models/baseline_{모델명}_best.pt`에 저장됩니다.
-
-```bash
-python main.py --mode train
-```
-
-### `--mode train_all`
-fold 1~5를 순서대로 자동 학습합니다.  
-각 fold 결과는 `models/fold{N}_{모델명}_best.pt`에 저장됩니다.  
-WBF 앙상블 사용 시 이 모드로 먼저 학습해야 합니다.
-
-```bash
-python main.py --mode train_all
-```
-
-### `--mode predict`
-단일 모델로 이미지를 예측합니다.  
-결과는 `runs/detect/predict_{모델명}/`에 저장됩니다.
-
-```bash
-python main.py --mode predict --source data/images/test/
-
-# 가중치 직접 지정
-python main.py --mode predict --source data/images/test/ --weights models/best_model.pt
-
-# 신뢰도 임계값 조정
-python main.py --mode predict --source data/images/test/ --conf 0.5
-```
-
-### `--mode wbf`
-5-Fold WBF(Weighted Boxes Fusion) 앙상블 예측을 실행합니다.  
-`models/` 폴더의 `fold*_best.pt` 파일을 자동으로 수집합니다.  
-결과는 `runs/detect/wbf_{모델명}/`에 저장됩니다.
-
-```bash
-python main.py --mode wbf --source data/images/test/
-
-# 신뢰도 임계값 조정
-python main.py --mode wbf --source data/images/test/ --conf 0.15
-```
-
-### `--mode experiment`
-실험 이름별로 학습을 실행합니다.
-
-```bash
-python main.py --mode experiment --exp baseline
-```
-
-### `--mode experiment_all`
-`config/experiments/` 의 모든 실험을 순차 실행합니다.
-
-```bash
-python main.py --mode experiment_all
-```
-
-### `--mode compare`
-누적된 실험 결과를 비교합니다.
-
-```bash
-python main.py --mode compare
-```
-
-### `--mode all`
-데이터 준비(`data`) → 학습(`train`)을 순서대로 실행합니다.
-
-```bash
-python main.py --mode all
-```
-
----
-
-## 옵션
-
-| 옵션 | 설명 | 기본값 |
-|------|------|--------|
-| `--mode` | 실행 모드 | `all` |
-| `--source` | 예측 이미지 경로 또는 폴더 | `None` |
-| `--weights` | 예측 시 사용할 가중치 경로 | `models/best_model.pt` |
-| `--conf` | 신뢰도 임계값 | `0.25` |
-| `--exp` | experiment 모드 실험 이름 | `baseline` |
-| `--no-ocr` | OCR 각인 보정 비활성화 | `False` |
-
----
-
-## 📊 주요 기능
-
-| 기능 | 설명 |
-|------|------|
-| **메트릭 정규화** | mAP50, mAP50-95, Precision, Recall 등 YOLO 지표 표준화 |
-| **실험 비교** | 여러 YOLO 실험 결과를 나란히 비교 |
-| **시각화** | 학습 곡선 및 성능 지표 시각화 |
-| **리포트 생성** | 실험 결과 자동 리포트 생성 |
-| **OCR 보정** | 각인 기반 클래스 보정 |
-| **WBF 앙상블** | 5-Fold Weighted Boxes Fusion 앙상블 |
-
----
-
-## 결과 저장 위치
+## 저장소 구조
 
 ```
-models/
-├── baseline_{모델명}_best.pt    # train 모드 결과
-├── fold1_{모델명}_best.pt       # train_all 모드 결과
-├── fold2_{모델명}_best.pt
-└── ...
-
-runs/detect/
-├── predict_{모델명}/            # predict 모드 결과
-└── wbf_{모델명}/                # wbf 모드 결과
-
-results/
-└── {실험명}/
-    ├── weights/best.pt
-    ├── results.csv
-    └── confusion_matrix.png
+main.py                  실행 진입점 (모드 선택)
+check_split_v3.py        fold별 split 구성과 누락 파일 검사
+src/
+  config.py              경로·하이퍼파라미터·Stage 2 설정
+  dataset.py             split 경로 보정, Stage 2 크롭 생성
+  model.py               YOLO 학습·예측
+  wbf_ensemble.py        5-Fold WBF, 후처리 필터, 시각화, submission.csv
+  crop_classifier.py     Stage 2 EfficientNet-B3 학습·추론
+  ocr_correction.py      EasyOCR 각인 보정 (4방향 × 4전처리)
+  experiment.py, eval/   YAML 실험 실행, 지표 정리, 실험 비교
+config/experiments/      비교 실험 설정
+code_mapping.csv         클래스 ↔ 약품명·각인 매핑
+data_fold1~5.yaml        fold별 데이터 설정
+docs/profiles/           보고서·발표자료
 ```
 
----
+## 한계
 
-<p align="center">
-  Made with ❤️ HAPPY 6 TEAM
-</p>
+- 검증 지표가 1.0에 가까워요. 합성·크롭 데이터가 fold 사이에 섞였다면 과대평가일 수 있어요.
+- 표면이 마모됐거나 각인이 거의 없는 약, 학습에 없던 새 약은 여전히 틀릴 수 있어요.
+- 데이터와 모델을 동시에 바꿔서 단계별 효과를 같은 조건에서 비교하지 못했어요.
+
+## 문서
+
+- [프로젝트 보고서 (PDF)](docs/profiles/6팀_보고서.pdf)
+- [발표 자료 (PPTX)](docs/profiles/6팀_발표.pptx)
+- 협업일지: [정승호](https://www.notion.so/348835bcc7588014bdb7d345644b534b) · [임동규](https://www.notion.so/6-_-_-34850973847880a49959d7639bbfec66?source=copy_link) · [전민재](https://www.notion.so/AI-_10-_-2_6-_AI-_-2026_04-05-34857454ec1d80d690c9d09c8165806f?source=copy_link) · [조희원](https://www.notion.so/6-Daily-35d57c90138b8005b36fc16e96cb7b28?source=copy_link) · [송기하](docs/profiles/%E1%84%80%E1%85%B5%E1%84%92%E1%85%A1.pdf) · [성치용](https://broken-a-lot-of-bone.tistory.com/category/%EC%B4%88%EA%B8%89%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EA%B2%BD%EA%B5%AC%EC%95%BD%EC%B2%B4_%ED%83%90%EC%A7%80)
