@@ -37,8 +37,6 @@ yolov8s.pt
 yolo11s.pt
 yolo11n.pt
 wandb/
-data_fold*.yaml
-data.yaml
 
 # 폴더 구조는 깃에 올리고, 내부 데이터만 무시
 data/images/test/**/*
@@ -51,6 +49,10 @@ data/labels/train/**/*
 !data/labels/train/**/README.md
 
 data/splits/**/*
+!data/splits/**/README.md
+data/crops/**/*
+
+*.cache
 
 models/**/*
 !models/**/README.md
@@ -60,8 +62,6 @@ results/**/*
 
 runs/**/*
 !runs/**/README.md
-
-sprint_ai_project1_data/
 
 # OS generated files
 .DS_Store
@@ -79,3 +79,4 @@ Desktop.ini
 *.swp
 *.swo
 CLAUDE.md
+PLAN_2STAGE.md

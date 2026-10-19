@@ -28,18 +28,78 @@ import torch
 from ultralytics import YOLO
 from ensemble_boxes import weighted_boxes_fusion
 
-from config import MODELS_DIR, RESULTS_DIR, TRAIN
+from config import MODELS_DIR, RESULTS_DIR, TRAIN, ROOT
+
+
+def build_category_mapping(csv_path=None) -> dict:
+    """code_mapping.csv에서 {class_idx: category_id} 매핑 반환. K-001900 → 1900."""
+    import csv as _csv
+    path = Path(csv_path) if csv_path else ROOT / "code_mapping.csv"
+    mapping = {}
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        for row in _csv.DictReader(f):
+            idx = int(row["class_idx"])
+            mapping[idx] = int(row["k_code"].replace("K-", "").lstrip("0") or "0")
+    return mapping
+
+
+def save_submission_csv(
+    detections: list,
+    save_dir: Path,
+    filename: str = "submission.csv",
+    category_mapping: dict = None,
+) -> Path:
+    """
+    submission 형식 CSV 저장.
+
+    detections: [(image_id, img_w, img_h, result_dict), ...]
+      result_dict: {"boxes": [[x1n,y1n,x2n,y2n],...], "scores":[...], "labels":[...]}
+      박스 좌표는 0~1 정규화값 → 픽셀 x,y,w,h 로 변환
+    """
+    import csv as _csv
+    if category_mapping is None:
+        category_mapping = build_category_mapping()
+
+    out_path = save_dir / filename
+    ann_id   = 1
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = _csv.writer(f)
+        writer.writerow(["annotation_id", "image_id", "category_id",
+                         "bbox_x", "bbox_y", "bbox_w", "bbox_h", "score"])
+        for image_id, img_w, img_h, result in detections:
+            for box, score, label in zip(result["boxes"], result["scores"], result["labels"]):
+                x1n, y1n, x2n, y2n = box
+                writer.writerow([
+                    ann_id,
+                    image_id,
+                    category_mapping.get(label, label),
+                    round(x1n * img_w),
+                    round(y1n * img_h),
+                    round((x2n - x1n) * img_w),
+                    round((y2n - y1n) * img_h),
+                    round(score, 4),
+                ])
+                ann_id += 1
+    print(f"[제출] {out_path.name}  ({ann_id - 1}개 검출) → {save_dir}")
+    return out_path
 
 
 def get_fold_models() -> list:
-    """models/ 폴더에서 fold*_best.pt 파일 목록 반환"""
-    models = sorted(MODELS_DIR.glob("fold*_best.pt"))
+    """models/ 폴더에서 설정된 아키텍처의 fold*_best.pt 파일 목록 반환 (폴드당 1개)"""
+    model_stem = Path(TRAIN["model"]).stem          # e.g. "yolo12n"
+    pattern    = f"fold*_{model_stem}_best.pt"
+    models     = sorted(MODELS_DIR.glob(pattern))
+
+    # 아키텍처 명시 파일이 없으면 구형 단일-아키텍처 명명 규칙으로 폴백
+    if not models:
+        models = sorted(MODELS_DIR.glob("fold*_best.pt"))
+
     if not models:
         raise FileNotFoundError(
-            f"[오류] {MODELS_DIR} 에 fold*_best.pt 파일이 없습니다.\n"
+            f"[오류] {MODELS_DIR} 에 {pattern} 파일이 없습니다.\n"
             "  먼저 python main.py --mode train_all 을 실행하세요."
         )
-    print(f"[앙상블] 모델 {len(models)}개 발견:")
+    print(f"[앙상블] 모델 {len(models)}개 발견 (아키텍처: {model_stem}):")
     for m in models:
         print(f"  {m.name}")
     return [str(m) for m in models]
@@ -136,6 +196,60 @@ def filter_corner_boxes(
         kept["boxes"].append(box)
         kept["scores"].append(score)
         kept["labels"].append(label)
+
+    return kept
+
+
+def _box_iou(b1: list, b2: list) -> float:
+    """두 정규화 bbox의 IoU 계산"""
+    ix1 = max(b1[0], b2[0])
+    iy1 = max(b1[1], b2[1])
+    ix2 = min(b1[2], b2[2])
+    iy2 = min(b1[3], b2[3])
+    inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+    if inter == 0.0:
+        return 0.0
+    area1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+    area2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+    return inter / (area1 + area2 - inter)
+
+
+def filter_overlapping_boxes(result: dict, iou_thr: float = 0.45) -> dict:
+    """
+    클래스와 무관하게 겹치는 박스를 제거합니다 (class-agnostic greedy NMS).
+
+    WBF는 같은 클래스 박스만 합산하므로, 동일 알약이 서로 다른 클래스로
+    중복 탐지되거나 같은 클래스로 두 번 탐지된 박스가 남을 수 있습니다.
+    score 내림차순으로 정렬 후 IoU > iou_thr 인 하위 박스를 제거합니다.
+    """
+    boxes  = result["boxes"]
+    scores = result["scores"]
+    labels = result["labels"]
+
+    if len(boxes) == 0:
+        return result
+
+    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    suppressed = set()
+
+    for i, idx in enumerate(order):
+        if idx in suppressed:
+            continue
+        for jdx in order[i + 1:]:
+            if jdx in suppressed:
+                continue
+            iou = _box_iou(boxes[idx], boxes[jdx])
+            if iou > iou_thr:
+                print(f"  [중복필터] 제거: cls={labels[jdx]} conf={scores[jdx]:.2f} "
+                      f"(IoU={iou:.2f} with cls={labels[idx]})")
+                suppressed.add(jdx)
+
+    kept = {"boxes": [], "scores": [], "labels": []}
+    for idx in order:
+        if idx not in suppressed:
+            kept["boxes"].append(boxes[idx])
+            kept["scores"].append(scores[idx])
+            kept["labels"].append(labels[idx])
 
     return kept
 
@@ -252,21 +366,27 @@ def draw_result(img: np.ndarray, result: dict, class_names: dict, conf_thr: floa
 
 
 def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
-                wbf_iou: float = 0.5, use_ocr: bool = True):
+                wbf_iou: float = 0.5, use_ocr: bool = True, use_stage2: bool = True):
     """
     5-Fold WBF 앙상블 예측 메인 함수
 
-    source  : 이미지 경로 또는 폴더 경로
-    conf    : 개별 모델 신뢰도 임계값
-    iou     : 개별 모델 NMS IoU
-    wbf_iou : WBF 합산 IoU 임계값
-    use_ocr : True이면 WBF 결과에 EasyOCR 각인 보정 적용
+    source     : 이미지 경로 또는 폴더 경로
+    conf       : 개별 모델 신뢰도 임계값
+    iou        : 개별 모델 NMS IoU
+    wbf_iou    : WBF 합산 IoU 임계값
+    use_ocr    : True이면 WBF 결과에 EasyOCR 각인 보정 적용
+    use_stage2 : True이면 Stage 2 crop 분류기 보정 적용
     """
     weight_paths = get_fold_models()
-    models       = [YOLO(w) for w in weight_paths]
-    class_names  = models[0].names
+    # Load only the first model temporarily to get class_names, then unload
+    _tmp = YOLO(weight_paths[0])
+    class_names = _tmp.names
+    del _tmp
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    # OCR 매핑 테이블 로드 (이미지 루프 전 1회)
+    # OCR 매핑 테이블 로드 (CPU만 사용, VRAM 영향 없음)
     print_mapping = {}
     if use_ocr:
         try:
@@ -295,12 +415,57 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     save_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[WBF 앙상블] {len(img_paths)}장 예측 시작")
-    print(f"  모델 수   : {len(models)}개")
+    print(f"  모델 수   : {len(weight_paths)}개")
     print(f"  conf      : {conf}")
     print(f"  wbf_iou   : {wbf_iou}")
     print(f"  저장 위치 : {save_dir}\n")
 
-    class_counts = defaultdict(int)
+    class_counts    = defaultdict(int)
+    all_detections  = []  # [(image_id, img_w, img_h, result), ...]
+    category_mapping = build_category_mapping()
+
+    # 모델별로 전체 이미지를 청크 단위로 예측 — 모델 하나씩 로드/해제로 VRAM 절약
+    # Stage 2는 VRAM을 많이 쓰므로 fold 예측이 모두 끝난 뒤에 로드
+    print("[WBF 앙상블] 모델별 배치 예측 중...")
+    CHUNK = 64  # 한 번에 처리할 이미지 수 (VRAM에 맞게 조정)
+    str_paths = [str(p) for p in img_paths]
+    per_model_preds = []
+    for m_idx, weight_path in enumerate(weight_paths, 1):
+        m = YOLO(weight_path)
+        fold_preds = []
+        for chunk_start in range(0, len(str_paths), CHUNK):
+            chunk = str_paths[chunk_start:chunk_start + CHUNK]
+            raw = m.predict(chunk, conf=conf, iou=iou, verbose=False, save=False)
+            for r in raw:
+                if len(r.boxes) == 0:
+                    fold_preds.append({"boxes": [], "scores": [], "labels": []})
+                    continue
+                h, w = r.orig_shape
+                fold_preds.append({
+                    "boxes":  [[b[0]/w, b[1]/h, b[2]/w, b[3]/h] for b in r.boxes.xyxy.tolist()],
+                    "scores": [float(c) for c in r.boxes.conf.tolist()],
+                    "labels": [int(c) for c in r.boxes.cls.tolist()],
+                })
+        per_model_preds.append(fold_preds)
+        del m
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print(f"  모델 {m_idx}/{len(weight_paths)} 완료")
+
+    # fold 예측 완료 후 Stage 2 모델 로드 (VRAM 공유 방지)
+    stage2_model = None
+    idx_to_class = None
+    if use_stage2:
+        try:
+            from crop_classifier import load_stage2_model, apply_stage2
+            stage2_model, idx_to_class = load_stage2_model()
+        except FileNotFoundError as e:
+            print(f"[경고] {e}")
+            use_stage2 = False
+        except ImportError:
+            print("[경고] crop_classifier 모듈을 찾을 수 없습니다. Stage 2를 건너뜁니다.")
+            use_stage2 = False
 
     for idx, img_path in enumerate(img_paths, 1):
         img = cv2.imread(str(img_path))
@@ -308,15 +473,19 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
             print(f"  [{idx}/{len(img_paths)}] 건너뜀 (손상): {img_path.name}")
             continue
 
-        all_preds = [
-            predict_single(m, str(img_path), conf=conf, iou=iou)
-            for m in models
-        ]
+        all_preds = [per_model_preds[m_idx][idx - 1] for m_idx in range(len(weight_paths))]
         result = run_wbf(all_preds, iou_thr=wbf_iou)
 
         # 이미지 꼭지점 접면 오탐 제거
         h, w = img.shape[:2]
         result = filter_corner_boxes(result, img_h=h, img_w=w)
+
+        # 클래스 무관 중복 박스 제거 (동일·다른 클래스 모두)
+        result = filter_overlapping_boxes(result, iou_thr=0.45)
+
+        # Stage 2: crop 분류기로 저신뢰도 박스 재분류
+        if use_stage2 and stage2_model is not None:
+            result = apply_stage2(img, result, stage2_model, idx_to_class, img_name=img_path.name, class_names=class_names)
 
         # OCR 각인 보정
         if use_ocr and print_mapping:
@@ -324,6 +493,12 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
 
         for label in result["labels"]:
             class_counts[label] += 1
+
+        try:
+            image_id = int(img_path.stem)
+        except ValueError:
+            image_id = img_path.stem
+        all_detections.append((image_id, w, h, result))
 
         img_draw = draw_result(img.copy(), result, class_names, conf_thr=conf)
         cv2.imwrite(str(save_dir / img_path.name), img_draw)
@@ -340,8 +515,8 @@ def wbf_predict(source: str, conf: float = 0.25, iou: float = 0.45,
     print(f"\n  총 탐지       : {sum(class_counts.values())}개")
     print(f"  탐지된 클래스 : {len(class_counts)}종 / {len(class_names)}종")
     print(f"  저장 위치     : {save_dir}")
-    # 예측 완료 후 GPU 메모리 해제
-    del models
+
+    save_submission_csv(all_detections, save_dir, category_mapping=category_mapping)
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
